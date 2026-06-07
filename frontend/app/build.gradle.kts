@@ -4,6 +4,97 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val generatedMsalResDir = layout.buildDirectory.dir("generated/msalAuthConfig/res")
+val unconfiguredTenantId = "00000000-0000-0000-0000-000000000000"
+val unconfiguredClientId = "00000000-0000-0000-0000-000000000000"
+val unconfiguredRedirectUri = "msauth://dev.vvanttinen.notes/notes-msal-unconfigured"
+val unconfiguredSignatureHash = "notes-msal-unconfigured"
+val unconfiguredApiScope = "api://00000000-0000-0000-0000-000000000000/access_as_user"
+
+fun localEntraValue(name: String): String? =
+    providers.environmentVariable(name)
+        .orElse(providers.gradleProperty(name))
+        .orNull
+        ?.takeIf { it.isNotBlank() }
+
+fun buildConfigString(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+fun jsonString(value: String): String = buildString {
+    append('"')
+    value.forEach { char ->
+        when (char) {
+            '\\' -> append("\\\\")
+            '"' -> append("\\\"")
+            '\b' -> append("\\b")
+            '\u000C' -> append("\\f")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            else -> {
+                if (char.code < 0x20) {
+                    append("\\u")
+                    append(char.code.toString(16).padStart(4, '0'))
+                } else {
+                    append(char)
+                }
+            }
+        }
+    }
+    append('"')
+}
+
+val notesEntraTenantId = localEntraValue("NOTES_ENTRA_TENANT_ID")
+val notesEntraAndroidClientId = localEntraValue("NOTES_ENTRA_ANDROID_CLIENT_ID")
+val notesEntraAndroidRedirectUri = localEntraValue("NOTES_ENTRA_ANDROID_REDIRECT_URI")
+val notesEntraAndroidSignatureHash = localEntraValue("NOTES_ENTRA_ANDROID_SIGNATURE_HASH")
+val notesEntraApiScope = localEntraValue("NOTES_ENTRA_API_SCOPE")
+val notesEntraConfigured = listOf(
+    notesEntraTenantId,
+    notesEntraAndroidClientId,
+    notesEntraAndroidRedirectUri,
+    notesEntraAndroidSignatureHash,
+    notesEntraApiScope
+).all { !it.isNullOrBlank() }
+
+val generateMsalAuthConfig by tasks.registering {
+    val tenantId = notesEntraTenantId ?: unconfiguredTenantId
+    val clientId = notesEntraAndroidClientId ?: unconfiguredClientId
+    val redirectUri = notesEntraAndroidRedirectUri ?: unconfiguredRedirectUri
+    val outputDir = generatedMsalResDir
+
+    inputs.property("tenantId", tenantId)
+    inputs.property("clientId", clientId)
+    inputs.property("redirectUri", redirectUri)
+    outputs.dir(outputDir)
+
+    doLast {
+        val rawDir = outputDir.get().asFile.resolve("raw")
+        rawDir.mkdirs()
+        rawDir.resolve("msal_auth_config.json").writeText(
+            """
+            {
+              "client_id": ${jsonString(clientId)},
+              "redirect_uri": ${jsonString(redirectUri)},
+              "broker_redirect_uri_registered": true,
+              "authorization_user_agent": "DEFAULT",
+              "account_mode": "SINGLE",
+              "authorities": [
+                {
+                  "type": "AAD",
+                  "audience": {
+                    "type": "AzureADMyOrg",
+                    "tenant_id": ${jsonString(tenantId)}
+                  },
+                  "default": true
+                }
+              ]
+            }
+            """.trimIndent()
+        )
+    }
+}
+
 android {
     namespace = "dev.vvanttinen.notes"
     compileSdk {
@@ -20,6 +111,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        manifestPlaceholders["msalPackageName"] = applicationId ?: "dev.vvanttinen.notes"
+        manifestPlaceholders["msalSignatureHash"] = notesEntraAndroidSignatureHash ?: unconfiguredSignatureHash
+        buildConfigField("boolean", "NOTES_ENTRA_CONFIGURED", notesEntraConfigured.toString())
+        buildConfigField("String", "NOTES_ENTRA_API_SCOPE", buildConfigString(notesEntraApiScope ?: ""))
     }
 
     buildTypes {
@@ -37,7 +133,17 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+    sourceSets {
+        getByName("main") {
+            res.srcDir(generatedMsalResDir.get().asFile)
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn(generateMsalAuthConfig)
 }
 
 ksp {
@@ -54,11 +160,14 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.runtime)
+    implementation(libs.msal)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
