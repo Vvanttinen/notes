@@ -53,7 +53,7 @@
 - `id` is a client-generated or backend-preserved note UUID stored as stable text.
 - `created_at`, `updated_at`, and nullable `deleted_at` are Kotlin `Instant` values stored as epoch milliseconds.
 - `server_revision` is nullable; `null` means the backend has not accepted the note yet, while `0` is a valid synchronized backend revision.
-- `local_mutation_version` is a local-only upload token incremented for local creates, edits, and tombstones.
+- `local_mutation_version` is a local-only upload token incremented atomically for local creates, edits, and tombstones.
 - `sync_state` is a stable text enum with values `SYNCED`, `PENDING_UPSERT`, and `PENDING_DELETE`.
 - `LocalNote.createNew` generates client-side UUIDs for new offline notes unless a caller supplies a specific UUID.
 - Active-note indexing is scoped by account and tombstone/order columns: `account_key ASC`, `deleted_at ASC`, `updated_at DESC`, `id ASC`.
@@ -63,13 +63,15 @@
 
 - `LocalNoteDao` observes active notes for one account ordered by `updated_at DESC, id ASC`.
 - `LocalNoteDao` observes and loads a single active note by `account_key` and `id`.
-- `LocalNoteDao` upserts notes, marks notes as tombstoned, searches active title/body text with `LIKE`, lists pending changes, marks notes synchronized, and deletes acknowledged tombstones.
-- Synchronization acknowledgement is compare-and-set guarded by `local_mutation_version`; stale backend acknowledgements cannot clear newer pending local changes.
+- `LocalNoteDao` saves local creates and edits in a Room transaction that reads the current account-scoped row and writes the next `local_mutation_version` atomically with the local `PENDING_UPSERT` state.
+- `LocalNoteDao` tombstones existing notes with a single account-scoped SQL update that sets `PENDING_DELETE` and increments `local_mutation_version` with SQLite arithmetic.
+- `LocalNoteDao` searches active title/body text with `LIKE`, lists pending changes, marks notes synchronized, and deletes acknowledged tombstones.
+- Synchronization acknowledgement is an account-scoped compare-and-set guarded by the uploaded `local_mutation_version`; stale backend acknowledgements and wrong-account acknowledgements return failure and cannot clear newer pending local changes.
 - Tombstoned notes are excluded from active listings, single active-note reads, and search results.
 - Pending-change lookup includes pending tombstones.
 - Acknowledged tombstones are removed only through the explicit account-scoped cleanup method.
 - `LocalNoteRepository` exposes the small local boundary for observing, loading, saving local edits, tombstoning, searching, listing pending changes, acknowledging synchronization, and cleaning up acknowledged tombstones.
-- `RoomLocalNoteRepository` validates the 255-character title application boundary, derives the next local mutation version from the current account-scoped row, transitions local creates/edits to `PENDING_UPSERT`, and requires the uploaded local mutation version when acknowledging synchronization.
+- `RoomLocalNoteRepository` validates the 255-character title application boundary, delegates local create/edit persistence to the DAO transaction so version advancement is atomic, and requires the uploaded local mutation version when acknowledging synchronization.
 
 ## Type converters
 
@@ -85,8 +87,8 @@
 - Build command: `gradlew.bat assembleDebug` from `frontend/`.
 - Connected database test command: `gradlew.bat connectedDebugAndroidTest` from `frontend/`.
 - Room database behavior is covered by Android instrumented in-memory database tests in `LocalNoteDatabaseTest`.
-- Instrumented tests cover UUID preservation, updates, active ordering, title/body search, tombstone exclusion, pending tombstone inclusion, account partitioning, nullable and zero server revisions, local mutation version increments, stale acknowledgement protection, sync-state transitions, explicit tombstone cleanup, and type converters.
-- Connected Android tests require an attached device or emulator.
+- Instrumented tests cover UUID preservation, updates, active ordering, title/body search, tombstone exclusion, pending tombstone inclusion, account partitioning, nullable and zero server revisions, sequential and concurrent local mutation version advancement, stale acknowledgement rejection after newer edits and tombstones, wrong-account acknowledgement rejection, title-length boundaries, sync-state transitions, explicit tombstone cleanup, and type converters.
+- Latest frontend verification on this snapshot passed `gradlew.bat assembleDebug`, `gradlew.bat lintDebug`, `gradlew.bat testDebugUnitTest`, and `gradlew.bat connectedDebugAndroidTest`; connected tests require an attached device or emulator.
 
 ## Explicitly deferred
 

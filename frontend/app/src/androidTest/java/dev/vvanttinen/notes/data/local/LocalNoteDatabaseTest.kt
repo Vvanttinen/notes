@@ -5,7 +5,12 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import dev.vvanttinen.notes.data.repository.RoomLocalNoteRepository
 import dev.vvanttinen.notes.domain.LocalNote
+import dev.vvanttinen.notes.domain.LocalNoteRepository
 import dev.vvanttinen.notes.domain.NoteSyncState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -17,6 +22,8 @@ import org.junit.Before
 import org.junit.Test
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.TimeUnit
 
 class LocalNoteDatabaseTest {
     private lateinit var database: NotesDatabase
@@ -168,6 +175,56 @@ class LocalNoteDatabaseTest {
     }
 
     @Test
+    fun localMutationVersionAdvancesForCreateEditAndTombstone() = runBlocking {
+        val id = uuid("00000000-0000-0000-0000-000000000101")
+
+        repository.createOrSaveLocalNote(note(id = id, title = "Created", updatedAt = instant(1_000)))
+        val created = repository.loadActiveNote(ACCOUNT_A, id)
+        assertEquals(1L, created?.localMutationVersion)
+        assertEquals(NoteSyncState.PENDING_UPSERT, created?.syncState)
+
+        repository.createOrSaveLocalNote(note(id = id, title = "Edited", updatedAt = instant(2_000)))
+        val edited = repository.loadActiveNote(ACCOUNT_A, id)
+        assertEquals(2L, edited?.localMutationVersion)
+        assertEquals("Edited", edited?.title)
+        assertEquals(NoteSyncState.PENDING_UPSERT, edited?.syncState)
+
+        repository.tombstoneLocalNote(ACCOUNT_A, id, deletedAt = instant(3_000), updatedAt = instant(3_000))
+        val deleted = repository.listPendingChanges(ACCOUNT_A).single()
+        assertEquals(3L, deleted.localMutationVersion)
+        assertEquals(instant(3_000), deleted.deletedAt)
+        assertEquals(NoteSyncState.PENDING_DELETE, deleted.syncState)
+    }
+
+    @Test
+    fun concurrentLocalSavesAllocateOneMutationVersionPerSave() = runBlocking {
+        val id = uuid("00000000-0000-0000-0000-000000000102")
+        val concurrentSaveCount = 8
+        repository.createOrSaveLocalNote(note(id = id, title = "Initial", updatedAt = instant(1_000)))
+
+        coroutineScope {
+            val startBarrier = CyclicBarrier(concurrentSaveCount)
+            (1..concurrentSaveCount).map { index ->
+                async(Dispatchers.IO) {
+                    startBarrier.await(5, TimeUnit.SECONDS)
+                    repository.createOrSaveLocalNote(
+                        note(
+                            id = id,
+                            title = "Edit $index",
+                            body = "Body $index",
+                            updatedAt = instant(2_000L + index)
+                        )
+                    )
+                }
+            }.awaitAll()
+        }
+
+        val loaded = repository.loadActiveNote(ACCOUNT_A, id)
+        assertEquals(1L + concurrentSaveCount, loaded?.localMutationVersion)
+        assertEquals(NoteSyncState.PENDING_UPSERT, loaded?.syncState)
+    }
+
+    @Test
     fun tombstoningTransitionsToPendingDelete() = runBlocking {
         val id = uuid("00000000-0000-0000-0000-000000000110")
         repository.createOrSaveLocalNote(note(id = id))
@@ -251,6 +308,63 @@ class LocalNoteDatabaseTest {
     }
 
     @Test
+    fun staleSynchronizationAcknowledgementCannotClearNewerPendingTombstone() = runBlocking {
+        val id = uuid("00000000-0000-0000-0000-000000000122")
+        repository.createOrSaveLocalNote(note(id = id, title = "Original", body = "Original body"))
+        val uploadedUpsertVersion = repository.loadActiveNote(ACCOUNT_A, id)!!.localMutationVersion
+
+        repository.tombstoneLocalNote(ACCOUNT_A, id, deletedAt = instant(16_000), updatedAt = instant(16_000))
+
+        assertFalse(
+            repository.markNoteSynchronized(
+                accountKey = ACCOUNT_A,
+                id = id,
+                uploadedLocalMutationVersion = uploadedUpsertVersion,
+                serverRevision = 2,
+                createdAt = instant(13_000),
+                updatedAt = instant(14_000),
+                deletedAt = null
+            )
+        )
+
+        val pending = repository.listPendingChanges(ACCOUNT_A).single()
+        assertEquals(id, pending.id)
+        assertEquals("Original", pending.title)
+        assertEquals("Original body", pending.body)
+        assertEquals(instant(16_000), pending.updatedAt)
+        assertEquals(instant(16_000), pending.deletedAt)
+        assertNull(pending.serverRevision)
+        assertEquals(uploadedUpsertVersion + 1, pending.localMutationVersion)
+        assertEquals(NoteSyncState.PENDING_DELETE, pending.syncState)
+    }
+
+    @Test
+    fun wrongAccountSynchronizationAcknowledgementIsRejected() = runBlocking {
+        val id = uuid("00000000-0000-0000-0000-000000000123")
+        repository.createOrSaveLocalNote(note(accountKey = ACCOUNT_B, id = id, title = "Private", body = "Only B"))
+        val accountBNote = repository.loadActiveNote(ACCOUNT_B, id)!!
+
+        assertFalse(
+            repository.markNoteSynchronized(
+                accountKey = ACCOUNT_A,
+                id = id,
+                uploadedLocalMutationVersion = accountBNote.localMutationVersion,
+                serverRevision = 7,
+                createdAt = instant(20_000),
+                updatedAt = instant(21_000),
+                deletedAt = null
+            )
+        )
+
+        val unchanged = repository.loadActiveNote(ACCOUNT_B, id)
+        assertEquals("Private", unchanged?.title)
+        assertEquals("Only B", unchanged?.body)
+        assertNull(unchanged?.serverRevision)
+        assertEquals(accountBNote.localMutationVersion, unchanged?.localMutationVersion)
+        assertEquals(NoteSyncState.PENDING_UPSERT, unchanged?.syncState)
+    }
+
+    @Test
     fun acknowledgedTombstoneIsRemovedOnlyByExplicitCleanup() = runBlocking {
         val id = uuid("00000000-0000-0000-0000-000000000130")
         repository.createOrSaveLocalNote(note(id = id))
@@ -288,6 +402,33 @@ class LocalNoteDatabaseTest {
 
         assertFalse(repository.cleanUpAcknowledgedTombstone(ACCOUNT_A, id))
         assertEquals(id, repository.loadActiveNote(ACCOUNT_A, id)?.id)
+    }
+
+    @Test
+    fun titleAtBackendLimitIsAccepted() = runBlocking {
+        val id = uuid("00000000-0000-0000-0000-000000000150")
+        val title = "x".repeat(LocalNoteRepository.MAX_TITLE_LENGTH)
+
+        repository.createOrSaveLocalNote(note(id = id, title = title))
+
+        assertEquals(title, repository.loadActiveNote(ACCOUNT_A, id)?.title)
+    }
+
+    @Test
+    fun titleBeyondBackendLimitIsRejected() = runBlocking {
+        val id = uuid("00000000-0000-0000-0000-000000000151")
+        val title = "x".repeat(LocalNoteRepository.MAX_TITLE_LENGTH + 1)
+
+        val failure = runCatching {
+            repository.createOrSaveLocalNote(note(id = id, title = title))
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalArgumentException)
+        assertEquals(
+            "Note title must be ${LocalNoteRepository.MAX_TITLE_LENGTH} characters or fewer.",
+            failure?.message
+        )
+        assertNull(repository.loadActiveNote(ACCOUNT_A, id))
     }
 
     @Test

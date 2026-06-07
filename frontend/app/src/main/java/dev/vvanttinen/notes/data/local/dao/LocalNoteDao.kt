@@ -2,14 +2,16 @@ package dev.vvanttinen.notes.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import dev.vvanttinen.notes.data.local.entity.LocalNoteEntity
+import dev.vvanttinen.notes.domain.NoteSyncState
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.util.UUID
 
 @Dao
-interface LocalNoteDao {
+abstract class LocalNoteDao {
     @Query(
         """
         SELECT * FROM local_notes
@@ -18,7 +20,7 @@ interface LocalNoteDao {
         ORDER BY updated_at DESC, id ASC
         """
     )
-    fun observeActiveNotes(accountKey: String): Flow<List<LocalNoteEntity>>
+    abstract fun observeActiveNotes(accountKey: String): Flow<List<LocalNoteEntity>>
 
     @Query(
         """
@@ -28,7 +30,7 @@ interface LocalNoteDao {
             AND deleted_at IS NULL
         """
     )
-    fun observeActiveNote(accountKey: String, id: UUID): Flow<LocalNoteEntity?>
+    abstract fun observeActiveNote(accountKey: String, id: UUID): Flow<LocalNoteEntity?>
 
     @Query(
         """
@@ -38,7 +40,7 @@ interface LocalNoteDao {
             AND deleted_at IS NULL
         """
     )
-    suspend fun loadActiveNote(accountKey: String, id: UUID): LocalNoteEntity?
+    abstract suspend fun loadActiveNote(accountKey: String, id: UUID): LocalNoteEntity?
 
     @Query(
         """
@@ -47,10 +49,22 @@ interface LocalNoteDao {
             AND id = :id
         """
     )
-    suspend fun loadNote(accountKey: String, id: UUID): LocalNoteEntity?
+    abstract suspend fun loadNote(accountKey: String, id: UUID): LocalNoteEntity?
 
     @Upsert
-    suspend fun upsert(note: LocalNoteEntity)
+    abstract suspend fun upsert(note: LocalNoteEntity)
+
+    @Transaction
+    open suspend fun createOrSaveLocalMutation(note: LocalNoteEntity) {
+        val currentVersion = loadNote(note.accountKey, note.id)?.localMutationVersion ?: 0
+        upsert(
+            note.copy(
+                deletedAt = null,
+                localMutationVersion = currentVersion + 1,
+                syncState = NoteSyncState.PENDING_UPSERT
+            )
+        )
+    }
 
     @Query(
         """
@@ -63,7 +77,7 @@ interface LocalNoteDao {
             AND id = :id
         """
     )
-    suspend fun markDeleted(accountKey: String, id: UUID, deletedAt: Instant, updatedAt: Instant): Int
+    abstract suspend fun markDeleted(accountKey: String, id: UUID, deletedAt: Instant, updatedAt: Instant): Int
 
     @Query(
         """
@@ -77,7 +91,7 @@ interface LocalNoteDao {
         ORDER BY updated_at DESC, id ASC
         """
     )
-    fun searchActiveNotes(accountKey: String, query: String): Flow<List<LocalNoteEntity>>
+    abstract fun searchActiveNotes(accountKey: String, query: String): Flow<List<LocalNoteEntity>>
 
     @Query(
         """
@@ -87,7 +101,7 @@ interface LocalNoteDao {
         ORDER BY updated_at ASC, id ASC
         """
     )
-    suspend fun listPendingChanges(accountKey: String): List<LocalNoteEntity>
+    abstract suspend fun listPendingChanges(accountKey: String): List<LocalNoteEntity>
 
     @Query(
         """
@@ -102,7 +116,7 @@ interface LocalNoteDao {
             AND local_mutation_version = :uploadedLocalMutationVersion
         """
     )
-    suspend fun markSynchronized(
+    abstract suspend fun markSynchronized(
         accountKey: String,
         id: UUID,
         uploadedLocalMutationVersion: Long,
@@ -121,5 +135,5 @@ interface LocalNoteDao {
             AND sync_state = 'SYNCED'
         """
     )
-    suspend fun deleteAcknowledgedTombstone(accountKey: String, id: UUID): Int
+    abstract suspend fun deleteAcknowledgedTombstone(accountKey: String, id: UUID): Int
 }

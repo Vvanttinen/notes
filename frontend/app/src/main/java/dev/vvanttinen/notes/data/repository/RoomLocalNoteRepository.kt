@@ -4,7 +4,6 @@ import dev.vvanttinen.notes.data.local.dao.LocalNoteDao
 import dev.vvanttinen.notes.data.local.entity.toEntity
 import dev.vvanttinen.notes.domain.LocalNote
 import dev.vvanttinen.notes.domain.LocalNoteRepository
-import dev.vvanttinen.notes.domain.NoteSyncState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Instant
@@ -24,14 +23,7 @@ class RoomLocalNoteRepository(
             "Note title must be ${LocalNoteRepository.MAX_TITLE_LENGTH} characters or fewer."
         }
 
-        val currentVersion = localNoteDao.loadNote(note.accountKey, note.id)?.localMutationVersion ?: 0
-        localNoteDao.upsert(
-            note.copy(
-                deletedAt = null,
-                localMutationVersion = currentVersion + 1,
-                syncState = NoteSyncState.PENDING_UPSERT
-            ).toEntity()
-        )
+        localNoteDao.createOrSaveLocalMutation(note.toEntity())
     }
 
     override suspend fun tombstoneLocalNote(
