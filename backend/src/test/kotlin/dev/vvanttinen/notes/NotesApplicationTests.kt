@@ -1,15 +1,11 @@
 package dev.vvanttinen.notes
 
+import dev.vvanttinen.notes.support.AbstractIntegrationTest
 import org.junit.jupiter.api.Test
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Import
 
-@Import(TestcontainersConfiguration::class)
-@SpringBootTest
-class NotesApplicationTests {
+class NotesApplicationTests : AbstractIntegrationTest() {
 
-	@Test
-	fun contextLoads() {
-	}
+    @Test
+    fun contextLoads() = Unit
 
 }
