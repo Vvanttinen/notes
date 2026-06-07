@@ -1,0 +1,118 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "d9962ef8d147d839ad5ad57e440791fa",
+    "entities": [
+      {
+        "tableName": "local_notes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`account_key` TEXT NOT NULL, `id` TEXT NOT NULL, `title` TEXT NOT NULL, `body` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, `server_revision` INTEGER, `local_mutation_version` INTEGER NOT NULL, `sync_state` TEXT NOT NULL, PRIMARY KEY(`account_key`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "accountKey",
+            "columnName": "account_key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deleted_at",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "serverRevision",
+            "columnName": "server_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "localMutationVersion",
+            "columnName": "local_mutation_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "sync_state",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "account_key",
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_notes_account_active_order",
+            "unique": false,
+            "columnNames": [
+              "account_key",
+              "deleted_at",
+              "updated_at",
+              "id"
+            ],
+            "orders": [
+              "ASC",
+              "ASC",
+              "DESC",
+              "ASC"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_notes_account_active_order` ON `${TABLE_NAME}` (`account_key` ASC, `deleted_at` ASC, `updated_at` DESC, `id` ASC)"
+          },
+          {
+            "name": "index_local_notes_account_pending_order",
+            "unique": false,
+            "columnNames": [
+              "account_key",
+              "updated_at",
+              "id"
+            ],
+            "orders": [
+              "ASC",
+              "ASC",
+              "ASC"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_local_notes_account_pending_order` ON `${TABLE_NAME}` (`account_key` ASC, `updated_at` ASC, `id` ASC)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd9962ef8d147d839ad5ad57e440791fa')"
+    ]
+  }
+}
