@@ -41,3 +41,8 @@ out/
 
 ### Local Environment ###
 .env
+
+### Codex task packets ###
+/tasks/TP-*.md
+/backend/tasks/TP-*.md
+/frontend/tasks/TP-*.md
