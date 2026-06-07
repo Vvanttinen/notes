@@ -1,5 +1,6 @@
 package dev.vvanttinen.notes
 
+import dev.vvanttinen.notes.support.TestcontainersConfiguration
 import org.springframework.boot.fromApplication
 import org.springframework.boot.with
 
