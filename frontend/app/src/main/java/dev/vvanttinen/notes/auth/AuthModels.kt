@@ -1,17 +1,20 @@
 package dev.vvanttinen.notes.auth
 
-import android.app.Activity
-import kotlinx.coroutines.flow.StateFlow
-
 data class EntraAuthConfig(
     val isConfigured: Boolean,
-    val notesApiScope: String
+    val notesApiScope: String,
+    val msalAuthority: String
 ) {
     companion object {
-        fun fromValues(isConfigured: Boolean, notesApiScope: String): EntraAuthConfig =
+        fun fromValues(
+            isConfigured: Boolean,
+            notesApiScope: String,
+            msalAuthority: String
+        ): EntraAuthConfig =
             EntraAuthConfig(
-                isConfigured = isConfigured && notesApiScope.isNotBlank(),
-                notesApiScope = notesApiScope.trim()
+                isConfigured = isConfigured && notesApiScope.isNotBlank() && msalAuthority.isNotBlank(),
+                notesApiScope = notesApiScope.trim(),
+                msalAuthority = msalAuthority.trim()
             )
     }
 }
@@ -30,6 +33,7 @@ sealed interface AuthState {
 }
 
 enum class AuthErrorCategory {
+    AccessDenied,
     Canceled,
     Client,
     Configuration,
@@ -51,22 +55,4 @@ sealed interface GatewayResult<out T> {
     data class Failure(val category: AuthErrorCategory) : GatewayResult<Nothing>
     data object Canceled : GatewayResult<Nothing>
     data object InteractionRequired : GatewayResult<Nothing>
-}
-
-interface NotesAuthGateway {
-    suspend fun initialize(): GatewayResult<AuthAccount?>
-    suspend fun refreshCurrentAccount(): GatewayResult<AuthAccount?>
-    suspend fun signIn(activity: Activity, scopes: List<String>): GatewayResult<AuthAccount>
-    suspend fun signOut(): GatewayResult<Unit>
-    suspend fun acquireTokenSilently(scopes: List<String>): GatewayResult<String>
-}
-
-interface NotesAuthController {
-    val authState: StateFlow<AuthState>
-
-    suspend fun initialize()
-    suspend fun refreshCurrentAccount()
-    suspend fun signIn(activity: Activity)
-    suspend fun signOut()
-    suspend fun acquireNotesApiAccessTokenSilently(): SilentTokenResult
 }

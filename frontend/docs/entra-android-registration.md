@@ -58,6 +58,20 @@ NOTES_ENTRA_API_SCOPE
     api://<NOTES_API_CLIENT_ID>/access_as_user
 ```
 
+`NOTES_ENTRA_API_SCOPE` must be the full delegated Notes API scope. The short value `access_as_user` is not valid for Android MSAL token acquisition.
+
+The Android silent-token authority is derived from `NOTES_ENTRA_TENANT_ID` as:
+
+```text
+https://login.microsoftonline.com/<TENANT_ID>
+```
+
+Do not use the backend JWT issuer as the Android silent-token authority:
+
+```text
+https://login.microsoftonline.com/<TENANT_ID>/v2.0
+```
+
 For untracked Gradle properties, place the same names in a user-level file such as `~/.gradle/gradle.properties`, not in Git.
 
 ## Build Behavior
@@ -75,7 +89,14 @@ Without all local values, the app builds with a safe placeholder resource and en
 5. Confirm the app shows a generic signed-in state.
 6. Relaunch the app and confirm cached-account restoration.
 7. Return the app to the foreground and confirm it remains signed in.
-8. Select `Test silent token acquisition` and confirm only a sanitized success or failure category is shown.
+8. In a debug build, select `Test silent token acquisition` and confirm only a sanitized success or failure category is shown.
 9. Select `Sign out` and confirm the app returns to the signed-out state.
 
 The silent-token smoke test does not call `/api/me`; authenticated backend probing remains deferred.
+
+## Troubleshooting Sanitized Harness Errors
+
+- `configuration error`: verify the Android client ID belongs to the `Notes Android` public-client registration, the redirect URI is the portal-generated Android redirect URI, the manifest signature hash matches the installed package, the Android authority uses `https://login.microsoftonline.com/<TENANT_ID>`, and `NOTES_ENTRA_API_SCOPE` has the `api://<NOTES_API_CLIENT_ID>/access_as_user` shape.
+- `access denied`: verify the selected account belongs to the configured single tenant and that the `Notes Android` registration has the delegated `Notes API / access_as_user` permission consent required by the tenant.
+- `client error`: verify the installed package has exactly one matching `BrowserTabActivity` callback, the broker/browser can return to the app, and the Android platform package/signature hash is registered.
+- `service error`: verify the tenant authority and Entra app-registration alignment in the portal; do not copy tenant IDs, client IDs, redirect URIs, or signing hashes into tracked files while diagnosing.

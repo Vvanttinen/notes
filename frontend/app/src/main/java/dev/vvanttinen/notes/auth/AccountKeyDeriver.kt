@@ -8,7 +8,12 @@ object AccountKeyDeriver {
     private const val VERSION_PREFIX = "v1:"
 
     fun derive(authority: String, accountId: String): String {
-        val canonicalInput = "${normalizeAuthority(authority)}\n${accountId.trim()}"
+        val normalizedAuthority = normalizeAuthority(authority)
+        val normalizedAccountId = accountId.trim()
+        require(normalizedAuthority.isNotBlank()) { "Authority is required for account key derivation." }
+        require(normalizedAccountId.isNotBlank()) { "Account ID is required for account key derivation." }
+
+        val canonicalInput = "$normalizedAuthority\n$normalizedAccountId"
         val digest = MessageDigest.getInstance("SHA-256")
             .digest(canonicalInput.toByteArray(Charsets.UTF_8))
             .joinToString(separator = "") { byte -> "%02x".format(byte) }

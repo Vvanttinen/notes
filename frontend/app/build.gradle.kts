@@ -49,12 +49,14 @@ val notesEntraAndroidClientId = localEntraValue("NOTES_ENTRA_ANDROID_CLIENT_ID")
 val notesEntraAndroidRedirectUri = localEntraValue("NOTES_ENTRA_ANDROID_REDIRECT_URI")
 val notesEntraAndroidSignatureHash = localEntraValue("NOTES_ENTRA_ANDROID_SIGNATURE_HASH")
 val notesEntraApiScope = localEntraValue("NOTES_ENTRA_API_SCOPE")
+val notesEntraAuthority = notesEntraTenantId?.let { "https://login.microsoftonline.com/${it.trim().trim('/')}" }
 val notesEntraConfigured = listOf(
     notesEntraTenantId,
     notesEntraAndroidClientId,
     notesEntraAndroidRedirectUri,
     notesEntraAndroidSignatureHash,
-    notesEntraApiScope
+    notesEntraApiScope,
+    notesEntraAuthority
 ).all { !it.isNullOrBlank() }
 
 val generateMsalAuthConfig by tasks.registering {
@@ -116,6 +118,7 @@ android {
         manifestPlaceholders["msalSignatureHash"] = notesEntraAndroidSignatureHash ?: unconfiguredSignatureHash
         buildConfigField("boolean", "NOTES_ENTRA_CONFIGURED", notesEntraConfigured.toString())
         buildConfigField("String", "NOTES_ENTRA_API_SCOPE", buildConfigString(notesEntraApiScope ?: ""))
+        buildConfigField("String", "NOTES_ENTRA_AUTHORITY", buildConfigString(notesEntraAuthority ?: ""))
     }
 
     buildTypes {

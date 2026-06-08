@@ -13,38 +13,43 @@ class DefaultNotesAuthController(
 ) : NotesAuthController {
     private val operationMutex = Mutex()
     private val mutableAuthState = MutableStateFlow<AuthState>(AuthState.Initializing)
+    private var stateGeneration = 0L
 
     override val authState: StateFlow<AuthState> = mutableAuthState.asStateFlow()
 
     override suspend fun initialize() {
         operationMutex.withLock {
             if (!config.isConfigured) {
-                mutableAuthState.value = AuthState.Unconfigured
+                setAuthState(AuthState.Unconfigured)
                 return
             }
 
-            mutableAuthState.value = AuthState.Initializing
+            setAuthState(AuthState.Initializing)
             when (val result = gateway.initialize()) {
                 is GatewayResult.Success -> updateAccountState(result.value)
-                is GatewayResult.Failure -> mutableAuthState.value = AuthState.Error(result.category)
-                GatewayResult.Canceled -> mutableAuthState.value = AuthState.Error(AuthErrorCategory.Canceled)
-                GatewayResult.InteractionRequired -> mutableAuthState.value = AuthState.SignedOut
+                is GatewayResult.Failure -> setAuthState(AuthState.Error(result.category))
+                GatewayResult.Canceled -> setAuthState(AuthState.Error(AuthErrorCategory.Canceled))
+                GatewayResult.InteractionRequired -> setAuthState(AuthState.SignedOut)
             }
         }
     }
 
     override suspend fun refreshCurrentAccount() {
+        val refreshStartedAtGeneration = stateGeneration
         operationMutex.withLock {
             if (!config.isConfigured) {
-                mutableAuthState.value = AuthState.Unconfigured
+                setAuthState(AuthState.Unconfigured)
+                return
+            }
+            if (stateGeneration != refreshStartedAtGeneration) {
                 return
             }
 
             when (val result = gateway.refreshCurrentAccount()) {
                 is GatewayResult.Success -> updateAccountState(result.value)
-                is GatewayResult.Failure -> mutableAuthState.value = AuthState.Error(result.category)
-                GatewayResult.Canceled -> mutableAuthState.value = AuthState.Error(AuthErrorCategory.Canceled)
-                GatewayResult.InteractionRequired -> mutableAuthState.value = AuthState.SignedOut
+                is GatewayResult.Failure -> setAuthState(AuthState.Error(result.category))
+                GatewayResult.Canceled -> setAuthState(AuthState.Error(AuthErrorCategory.Canceled))
+                GatewayResult.InteractionRequired -> setAuthState(AuthState.SignedOut)
             }
         }
     }
@@ -52,15 +57,15 @@ class DefaultNotesAuthController(
     override suspend fun signIn(activity: Activity) {
         operationMutex.withLock {
             if (!config.isConfigured) {
-                mutableAuthState.value = AuthState.Unconfigured
+                setAuthState(AuthState.Unconfigured)
                 return
             }
 
             when (val result = gateway.signIn(activity, listOf(config.notesApiScope))) {
                 is GatewayResult.Success -> updateAccountState(result.value)
-                is GatewayResult.Failure -> mutableAuthState.value = AuthState.Error(result.category)
-                GatewayResult.Canceled -> mutableAuthState.value = AuthState.Error(AuthErrorCategory.Canceled)
-                GatewayResult.InteractionRequired -> mutableAuthState.value = AuthState.Error(AuthErrorCategory.InteractionRequired)
+                is GatewayResult.Failure -> setAuthState(AuthState.Error(result.category))
+                GatewayResult.Canceled -> setAuthState(AuthState.Error(AuthErrorCategory.Canceled))
+                GatewayResult.InteractionRequired -> setAuthState(AuthState.Error(AuthErrorCategory.InteractionRequired))
             }
         }
     }
@@ -68,15 +73,15 @@ class DefaultNotesAuthController(
     override suspend fun signOut() {
         operationMutex.withLock {
             if (!config.isConfigured) {
-                mutableAuthState.value = AuthState.Unconfigured
+                setAuthState(AuthState.Unconfigured)
                 return
             }
 
             when (val result = gateway.signOut()) {
-                is GatewayResult.Success -> mutableAuthState.value = AuthState.SignedOut
-                is GatewayResult.Failure -> mutableAuthState.value = AuthState.Error(result.category)
-                GatewayResult.Canceled -> mutableAuthState.value = AuthState.Error(AuthErrorCategory.Canceled)
-                GatewayResult.InteractionRequired -> mutableAuthState.value = AuthState.SignedOut
+                is GatewayResult.Success -> setAuthState(AuthState.SignedOut)
+                is GatewayResult.Failure -> setAuthState(AuthState.Error(result.category))
+                GatewayResult.Canceled -> setAuthState(AuthState.Error(AuthErrorCategory.Canceled))
+                GatewayResult.InteractionRequired -> setAuthState(AuthState.SignedOut)
             }
         }
     }
@@ -100,15 +105,24 @@ class DefaultNotesAuthController(
     }
 
     private fun updateAccountState(account: AuthAccount?) {
-        mutableAuthState.value = if (account == null) {
-            AuthState.SignedOut
+        if (account == null) {
+            setAuthState(AuthState.SignedOut)
         } else {
-            AuthState.SignedIn(
-                accountKey = AccountKeyDeriver.derive(
+            val accountKey = runCatching {
+                AccountKeyDeriver.derive(
                     authority = account.authority,
                     accountId = account.accountId
                 )
-            )
+            }.getOrElse {
+                setAuthState(AuthState.Error(AuthErrorCategory.Configuration))
+                return
+            }
+            setAuthState(AuthState.SignedIn(accountKey = accountKey))
         }
+    }
+
+    private fun setAuthState(authState: AuthState) {
+        mutableAuthState.value = authState
+        stateGeneration += 1
     }
 }

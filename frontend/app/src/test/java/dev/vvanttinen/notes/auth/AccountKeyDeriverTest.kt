@@ -40,4 +40,17 @@ class AccountKeyDeriverTest {
         assertNotEquals(baseline, differentAuthority)
         assertNotEquals(baseline, differentAccount)
     }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun missingAuthorityFailsExplicitly() {
+        AccountKeyDeriver.derive(authority = "  ", accountId = "account-1")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun missingAccountIdFailsExplicitly() {
+        AccountKeyDeriver.derive(
+            authority = "https://login.microsoftonline.com/11111111-1111-1111-1111-111111111111",
+            accountId = "  "
+        )
+    }
 }
