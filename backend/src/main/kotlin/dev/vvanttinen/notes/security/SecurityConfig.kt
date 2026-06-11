@@ -31,6 +31,7 @@ class SecurityConfig {
                     .requestMatchers(
                         HttpMethod.GET,
                         "/v3/api-docs/**",
+                        "/v3/api-docs.yaml",
                         "/swagger-ui.html",
                         "/swagger-ui/**",
                     ).permitAll()

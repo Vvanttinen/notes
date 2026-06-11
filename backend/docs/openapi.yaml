@@ -1,0 +1,187 @@
+openapi: 3.1.0
+info:
+  title: OpenAPI definition
+  version: v0
+servers:
+- url: http://localhost:8080
+  description: Generated server url
+paths:
+  /api/notes/{noteId}:
+    get:
+      tags:
+      - notes-controller
+      operationId: get
+      parameters:
+      - name: noteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/NoteResponse"
+    put:
+      tags:
+      - notes-controller
+      operationId: update
+      parameters:
+      - name: noteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNoteRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/NoteResponse"
+    delete:
+      tags:
+      - notes-controller
+      operationId: delete
+      parameters:
+      - name: noteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: If-Match
+        in: header
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      responses:
+        "200":
+          description: OK
+  /api/notes:
+    get:
+      tags:
+      - notes-controller
+      operationId: list
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NoteResponse"
+    post:
+      tags:
+      - notes-controller
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNoteRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/NoteResponse"
+  /api/me:
+    get:
+      tags:
+      - me-controller
+      operationId: me
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+components:
+  schemas:
+    UpdateNoteRequest:
+      type: object
+      properties:
+        title:
+          type:
+          - string
+          - "null"
+          maxLength: 255
+          minLength: 0
+        body:
+          type:
+          - string
+          - "null"
+      required:
+      - body
+      - title
+    NoteResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        revision:
+          type: integer
+          format: int64
+    CreateNoteRequest:
+      type: object
+      properties:
+        id:
+          type:
+          - string
+          - "null"
+          format: uuid
+        title:
+          type:
+          - string
+          - "null"
+          maxLength: 255
+          minLength: 0
+        body:
+          type:
+          - string
+          - "null"
+      required:
+      - body
+      - id
+      - title
+    MeResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
