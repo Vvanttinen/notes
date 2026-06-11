@@ -28,6 +28,12 @@ class SecurityConfig {
             .authorizeHttpRequests { requests ->
                 requests
                     .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                    .requestMatchers(
+                        HttpMethod.GET,
+                        "/v3/api-docs/**",
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                    ).permitAll()
                     .requestMatchers("/api/**").hasAuthority("SCOPE_access_as_user")
                     .anyRequest().denyAll()
             }

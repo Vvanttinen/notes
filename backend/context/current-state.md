@@ -27,6 +27,7 @@
 - JUnit Platform is configured for Gradle `Test` tasks.
 - Spring Security OAuth 2.0 resource-server JWT support is present through Spring Boot dependency management.
 - Spring Security resource-server test support is present for deterministic authenticated MVC tests.
+- Springdoc OpenAPI 3.0.3 generates the OpenAPI document and serves Swagger UI.
 
 ## Authentication and authorization
 
@@ -38,6 +39,7 @@
 - The production `JwtDecoder` uses the tenant-specific issuer and validates JWT signature, issuer, token timestamps, and the Notes API audience.
 - API security is stateless, disables CSRF for bearer-token requests, and does not configure form login, HTTP Basic, OAuth login redirects, or server-side sessions.
 - `GET /actuator/health` and health subpaths are permitted without authentication.
+- `GET /v3/api-docs/**`, `/swagger-ui.html`, and `/swagger-ui/**` are permitted without authentication.
 - `/api/**` requires an authenticated JWT with the default Spring Security `SCOPE_access_as_user` authority.
 - Any other request is denied by default.
 
@@ -107,6 +109,7 @@
 
 ## Documentation
 
+- Generated OpenAPI JSON is available at `/v3/api-docs`, and Swagger UI is available at `/swagger-ui/index.html`.
 - Sanitized Microsoft Entra API registration instructions are in `docs/entra-api-registration.md`.
 - The documentation covers a single-tenant `Notes API` registration, default `api://<NOTES_ENTRA_API_CLIENT_ID>` Application ID URI, delegated `access_as_user` scope, required backend environment variables, and deferred Android public-client setup.
 - The private Notes CRUD contract, DTO validation, ETag rules, statuses, sanitized errors, and deferred synchronization work are documented in `docs/notes-api.md`.
@@ -121,7 +124,7 @@
 - `AbstractIntegrationTest` truncates `notes` before `users` with `RESTART IDENTITY CASCADE` before each test.
 - `NotesApplicationTests` is a context-load smoke test that exercises container startup, Spring Boot service connection wiring, Flyway migration, and JPA mapping validation.
 - `PersistenceIntegrationTest` covers user identity lookup, unique Entra identity enforcement, note ownership scoping, active-note filtering, active-note ordering by `updatedAt DESC, id ASC`, and optimistic-lock revision updates.
-- `ResourceServerIntegrationTest` covers anonymous health access, unauthenticated `/api/me` rejection, missing-scope rejection, Spring's `scp` to `SCOPE_` JWT authority conversion, Notes API audience-validator accept/reject behavior, valid scoped `/api/me` provisioning, repeated identity idempotency, mismatched tenant rejection, missing and malformed identity-claim rejection, and concurrent first-use provisioning.
+- `ResourceServerIntegrationTest` covers anonymous health, OpenAPI, and Swagger UI access, unauthenticated `/api/me` rejection, missing-scope rejection, Spring's `scp` to `SCOPE_` JWT authority conversion, Notes API audience-validator accept/reject behavior, valid scoped `/api/me` provisioning, repeated identity idempotency, mismatched tenant rejection, missing and malformed identity-claim rejection, and concurrent first-use provisioning.
 - `NotesApiIntegrationTest` exercises real Spring MVC, Spring Security, current-user resolution, JPA, Flyway, and PostgreSQL wiring for Notes API authentication and scope enforcement, creation and ownership, empty content, title validation, UUID conflicts, active-list ordering, hidden cross-user and tombstoned reads, strong ETags, strict `If-Match` parsing, successful and stale updates, soft deletion, stale deletes, and sanitized problem responses.
 - Tests run against PostgreSQL, not H2.
 

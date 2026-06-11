@@ -42,6 +42,19 @@ class ResourceServerIntegrationTest : AbstractIntegrationTest() {
     }
 
     @Test
+    fun `OpenAPI documentation permits anonymous requests`() {
+        mockMvc.perform(get("/v3/api-docs"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.openapi").isString)
+    }
+
+    @Test
+    fun `Swagger UI permits anonymous requests`() {
+        mockMvc.perform(get("/swagger-ui/index.html"))
+            .andExpect(status().isOk)
+    }
+
+    @Test
     fun `api me requires authentication`() {
         mockMvc.perform(get("/api/me"))
             .andExpect(status().isUnauthorized)
@@ -217,10 +230,10 @@ class ResourceServerIntegrationTest : AbstractIntegrationTest() {
     @Suppress("UNCHECKED_CAST")
     private fun audienceValidator(): OAuth2TokenValidator<Jwt> =
         ReflectionTestUtils.invokeMethod<OAuth2TokenValidator<Jwt>>(
-            SecurityConfiguration(),
+            SecurityConfig(),
             "audienceValidator",
             TEST_API_CLIENT_ID,
-        ) ?: error("SecurityConfiguration audienceValidator method was not found.")
+        ) ?: error("SecurityConfig audienceValidator method was not found.")
 
     private fun countUsers(
         tenantId: UUID,
