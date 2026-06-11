@@ -1,48 +1,72 @@
 openapi: 3.1.0
 info:
-  title: OpenAPI definition
-  version: v0
+  title: Notes API
+  description: Authenticated private Notes backend API.
+  version: 0.0.1
 servers:
-- url: http://localhost:8080
-  description: Generated server url
+  - url: http://localhost:8080
+    description: Generated server url
 paths:
   /api/notes/{noteId}:
     get:
       tags:
-      - notes-controller
-      operationId: get
+        - notes-controller
+      summary: Get a private note
+      description: Returns an active owned note and its strong revision ETag.
+      operationId: getNote
       parameters:
-      - name: noteId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       responses:
         "200":
-          description: OK
+          description: Active owned note.
+          headers:
+            ETag:
+              description: Strong quoted note revision.
+              required: true
+              style: simple
+              schema:
+                type: string
+                example: '"0"'
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/NoteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      security:
+        - bearerAuth: []
     put:
       tags:
-      - notes-controller
-      operationId: update
+        - notes-controller
+      summary: Update a private note
+      description: Replaces title and body when If-Match contains the current strong
+        revision ETag.
+      operationId: updateNote
       parameters:
-      - name: noteId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          type: array
-          items:
+        - name: noteId
+          in: path
+          required: true
+          schema:
             type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          description: "Exactly one quoted strong non-negative decimal revision ETag.\
+          \ Missing returns 428; malformed, weak, wildcard, negative, non-numeric,\
+          \ overflowing, or multiple values return 400; stale returns 412."
+          required: true
+          schema:
+            type: string
+            example: '"0"'
       requestBody:
         content:
           application/json:
@@ -51,50 +75,103 @@ paths:
         required: true
       responses:
         "200":
-          description: OK
+          description: Updated note.
+          headers:
+            ETag:
+              description: Fresh strong quoted note revision.
+              required: true
+              style: simple
+              schema:
+                type: string
+                example: '"1"'
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/NoteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+      security:
+        - bearerAuth: []
     delete:
       tags:
-      - notes-controller
-      operationId: delete
+        - notes-controller
+      summary: Delete a private note
+      description: Soft-deletes an active owned note when If-Match contains its current
+        strong revision ETag.
+      operationId: deleteNote
       parameters:
-      - name: noteId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: If-Match
-        in: header
-        required: false
-        schema:
-          type: array
-          items:
+        - name: noteId
+          in: path
+          required: true
+          schema:
             type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          description: "Exactly one quoted strong non-negative decimal revision ETag.\
+          \ Missing returns 428; malformed, weak, wildcard, negative, non-numeric,\
+          \ overflowing, or multiple values return 400; stale returns 412."
+          required: true
+          schema:
+            type: string
+            example: '"0"'
       responses:
-        "200":
-          description: OK
+        "204":
+          description: Note soft-deleted.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+      security:
+        - bearerAuth: []
   /api/notes:
     get:
       tags:
-      - notes-controller
-      operationId: list
+        - notes-controller
+      summary: List private notes
+      description: Lists the current user's active notes ordered by most recently
+        updated.
+      operationId: listNotes
       responses:
         "200":
-          description: OK
+          description: Active owned notes.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/NoteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+      security:
+        - bearerAuth: []
     post:
       tags:
-      - notes-controller
-      operationId: create
+        - notes-controller
+      summary: Create a private note
+      description: Creates an owned note using a client-generated UUID and returns
+        its strong revision ETag.
+      operationId: createNote
       requestBody:
         content:
           application/json:
@@ -102,42 +179,90 @@ paths:
               $ref: "#/components/schemas/CreateNoteRequest"
         required: true
       responses:
-        "200":
-          description: OK
+        "201":
+          description: Note created.
+          headers:
+            ETag:
+              description: Strong quoted note revision.
+              required: true
+              style: simple
+              schema:
+                type: string
+                example: '"0"'
+            Location:
+              description: Canonical path of the created note.
+              required: true
+              style: simple
+              schema:
+                type: string
+                example: /api/notes/00000000-0000-0000-0000-000000000001
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/NoteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+      security:
+        - bearerAuth: []
   /api/me:
     get:
       tags:
-      - me-controller
-      operationId: me
+        - me-controller
+      summary: Get the current local user
+      description: Resolves or provisions the local user represented by the authenticated
+        access token.
+      operationId: getCurrentUser
       responses:
         "200":
-          description: OK
+          description: Current local user.
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+      security:
+        - bearerAuth: []
 components:
   schemas:
+    ProblemDetail:
+      type: object
+      description: Sanitized RFC 9457 problem details.
+      properties:
+        title:
+          type: string
+          description: Short problem summary.
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code.
+        detail:
+          type: string
+          description: Sanitized problem detail.
+      required:
+        - detail
+        - status
+        - title
     UpdateNoteRequest:
       type: object
       properties:
         title:
-          type:
-          - string
-          - "null"
+          type: string
           maxLength: 255
           minLength: 0
         body:
-          type:
-          - string
-          - "null"
+          type: string
       required:
-      - body
-      - title
+        - body
+        - title
     NoteResponse:
       type: object
       properties:
@@ -157,31 +282,91 @@ components:
         revision:
           type: integer
           format: int64
+      required:
+        - body
+        - createdAt
+        - id
+        - revision
+        - title
+        - updatedAt
     CreateNoteRequest:
       type: object
       properties:
         id:
-          type:
-          - string
-          - "null"
+          type: string
           format: uuid
         title:
-          type:
-          - string
-          - "null"
+          type: string
           maxLength: 255
           minLength: 0
         body:
-          type:
-          - string
-          - "null"
+          type: string
       required:
-      - body
-      - id
-      - title
+        - body
+        - id
+        - title
     MeResponse:
       type: object
       properties:
         userId:
           type: string
           format: uuid
+      required:
+        - userId
+  responses:
+    BadRequest:
+      description: The request is invalid.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            $ref: "#/components/schemas/ProblemDetail"
+    Unauthorized:
+      description: A valid bearer access token is required.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            $ref: "#/components/schemas/ProblemDetail"
+    Forbidden:
+      description: The access_as_user scope is required.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            $ref: "#/components/schemas/ProblemDetail"
+    NotFound:
+      description: The requested note was not found.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            $ref: "#/components/schemas/ProblemDetail"
+    Conflict:
+      description: The note identifier conflicts with an existing note.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            $ref: "#/components/schemas/ProblemDetail"
+    PreconditionFailed:
+      description: The note revision is stale.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            $ref: "#/components/schemas/ProblemDetail"
+    PreconditionRequired:
+      description: If-Match is required.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            $ref: "#/components/schemas/ProblemDetail"
+  securitySchemes:
+    bearerAuth:
+      type: http
+      description: Notes API bearer access token with the delegated access_as_user
+        scope.
+      scheme: bearer
+      bearerFormat: JWT

@@ -5,15 +5,12 @@ object NoteEtag {
 
     fun format(revision: Long): String = "\"$revision\""
 
-    fun parse(ifMatchValues: List<String>?): Long {
-        if (ifMatchValues.isNullOrEmpty()) {
+    fun parse(ifMatch: String?): Long {
+        if (ifMatch == null) {
             throw MissingNotePreconditionException()
         }
-        if (ifMatchValues.size != 1) {
-            throw MalformedNotePreconditionException()
-        }
 
-        val revision = strongRevisionPattern.matchEntire(ifMatchValues.single())?.groupValues?.get(1)
+        val revision = strongRevisionPattern.matchEntire(ifMatch)?.groupValues?.get(1)
             ?: throw MalformedNotePreconditionException()
 
         return revision.toLongOrNull()

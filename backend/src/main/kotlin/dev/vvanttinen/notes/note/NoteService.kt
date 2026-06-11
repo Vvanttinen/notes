@@ -23,10 +23,6 @@ class NoteService(
         body: String,
     ): NoteRecord {
         val owner = currentUser.resolve()
-        if (noteRepository.existsById(id)) {
-            throw DuplicateNoteIdException()
-        }
-
         val note = NoteEntity(
             id = id,
             owner = owner,

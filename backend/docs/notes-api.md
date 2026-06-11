@@ -5,6 +5,11 @@ requires an authenticated access token with the `access_as_user` scope. Notes
 are private to the resolved local user; cross-user, missing, and deleted notes
 all return the same `404 Not Found` response.
 
+Generated OpenAPI JSON is available at `/v3/api-docs`, and Swagger UI is
+available at `/swagger-ui/index.html`. For manual testing, use Swagger UI's
+`bearerAuth` authorization control and paste a Notes API bearer access token
+with the delegated `access_as_user` scope. Do not use an ID token.
+
 ## Resource
 
 Active note responses contain:
@@ -35,6 +40,12 @@ Owner identifiers and deletion timestamps are never exposed.
 Creation requires non-null `id`, `title`, and `body`. Updates require non-null
 `title` and `body`. Titles may contain at most 255 characters. Empty title and
 body strings are accepted and content is not trimmed or rewritten.
+
+The generated contract uses stable operation IDs: `getCurrentUser`,
+`listNotes`, `createNote`, `getNote`, `updateNote`, and `deleteNote`. It
+documents successful JSON responses as `application/json`, sanitized errors as
+`application/problem+json`, and the `Location`, `ETag`, and `If-Match` header
+semantics described here.
 
 A note UUID can never be reused, including after soft deletion. UUID collisions
 return a generic `409 Conflict`.

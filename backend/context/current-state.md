@@ -110,9 +110,13 @@
 ## Documentation
 
 - Generated OpenAPI JSON is available at `/v3/api-docs`, and Swagger UI is available at `/swagger-ui/index.html`.
+- The generated OpenAPI document identifies the API as `Notes API` version `0.0.1` and uses stable operation IDs for the current-user and Notes CRUD operations.
+- Protected API operations declare the sanitized `bearerAuth` HTTP bearer JWT scheme for Notes API access tokens with delegated `access_as_user` scope.
+- The generated contract documents exact success statuses, `application/json` DTO responses, create/read/update `ETag` headers, create `Location`, strict scalar `If-Match` semantics, and reusable `application/problem+json` responses.
+- Required request and response DTO fields are non-null in the generated OpenAPI schemas; a focused OpenAPI customizer corrects request-schema nullability while runtime request properties remain nullable for sanitized Bean Validation errors.
 - Sanitized Microsoft Entra API registration instructions are in `docs/entra-api-registration.md`.
 - The documentation covers a single-tenant `Notes API` registration, default `api://<NOTES_ENTRA_API_CLIENT_ID>` Application ID URI, delegated `access_as_user` scope, required backend environment variables, and deferred Android public-client setup.
-- The private Notes CRUD contract, DTO validation, ETag rules, statuses, sanitized errors, and deferred synchronization work are documented in `docs/notes-api.md`.
+- The private Notes CRUD contract, Swagger bearer-token testing, DTO validation, ETag rules, statuses, sanitized errors, and deferred synchronization work are documented in `docs/notes-api.md`.
 
 ## Integration tests
 
@@ -126,6 +130,7 @@
 - `PersistenceIntegrationTest` covers user identity lookup, unique Entra identity enforcement, note ownership scoping, active-note filtering, active-note ordering by `updatedAt DESC, id ASC`, and optimistic-lock revision updates.
 - `ResourceServerIntegrationTest` covers anonymous health, OpenAPI, and Swagger UI access, unauthenticated `/api/me` rejection, missing-scope rejection, Spring's `scp` to `SCOPE_` JWT authority conversion, Notes API audience-validator accept/reject behavior, valid scoped `/api/me` provisioning, repeated identity idempotency, mismatched tenant rejection, missing and malformed identity-claim rejection, and concurrent first-use provisioning.
 - `NotesApiIntegrationTest` exercises real Spring MVC, Spring Security, current-user resolution, JPA, Flyway, and PostgreSQL wiring for Notes API authentication and scope enforcement, creation and ownership, empty content, title validation, UUID conflicts, active-list ordering, hidden cross-user and tombstoned reads, strong ETags, strict `If-Match` parsing, successful and stale updates, soft deletion, stale deletes, and sanitized problem responses.
+- `OpenApiContractIntegrationTest` makes focused assertions against `/v3/api-docs` for metadata, bearer security, operation IDs, statuses, media types, headers, problem responses, strict `If-Match` documentation, schema requiredness and nullability, validation limits, and absence of tenant-specific values.
 - Tests run against PostgreSQL, not H2.
 
 ## Verification
