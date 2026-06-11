@@ -1,0 +1,58 @@
+package dev.vvanttinen.notes.auth
+
+data class EntraAuthConfig(
+    val isConfigured: Boolean,
+    val notesApiScope: String,
+    val msalAuthority: String
+) {
+    companion object {
+        fun fromValues(
+            isConfigured: Boolean,
+            notesApiScope: String,
+            msalAuthority: String
+        ): EntraAuthConfig =
+            EntraAuthConfig(
+                isConfigured = isConfigured && notesApiScope.isNotBlank() && msalAuthority.isNotBlank(),
+                notesApiScope = notesApiScope.trim(),
+                msalAuthority = msalAuthority.trim()
+            )
+    }
+}
+
+data class AuthAccount(
+    val authority: String,
+    val accountId: String
+)
+
+sealed interface AuthState {
+    data object Initializing : AuthState
+    data object Unconfigured : AuthState
+    data object SignedOut : AuthState
+    data class SignedIn(val accountKey: String) : AuthState
+    data class Error(val category: AuthErrorCategory) : AuthState
+}
+
+enum class AuthErrorCategory {
+    AccessDenied,
+    Canceled,
+    Client,
+    Configuration,
+    InteractionRequired,
+    Network,
+    Service,
+    Unknown
+}
+
+sealed interface SilentTokenResult {
+    data class Success(val accessToken: String) : SilentTokenResult
+    data object InteractionRequired : SilentTokenResult
+    data object SignedOut : SilentTokenResult
+    data class Failure(val category: AuthErrorCategory) : SilentTokenResult
+}
+
+sealed interface GatewayResult<out T> {
+    data class Success<T>(val value: T) : GatewayResult<T>
+    data class Failure(val category: AuthErrorCategory) : GatewayResult<Nothing>
+    data object Canceled : GatewayResult<Nothing>
+    data object InteractionRequired : GatewayResult<Nothing>
+}
