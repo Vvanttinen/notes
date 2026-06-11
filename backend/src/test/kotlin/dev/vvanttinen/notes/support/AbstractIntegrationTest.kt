@@ -9,8 +9,9 @@ import org.springframework.jdbc.core.JdbcTemplate
 
 @SpringBootTest(
     properties = [
-        "NOTES_ENTRA_TENANT_ID=10000000-0000-0000-0000-000000000000",
-        "NOTES_ENTRA_API_CLIENT_ID=30000000-0000-0000-0000-000000000000",
+        "notes.entra.tenant-id=10000000-0000-0000-0000-000000000000",
+        "notes.entra.api-client-id=30000000-0000-0000-0000-000000000000",
+        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://login.microsoftonline.com/10000000-0000-0000-0000-000000000000/v2.0",
     ],
 )
 @AutoConfigureMockMvc

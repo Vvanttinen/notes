@@ -7,6 +7,8 @@ import java.util.UUID
 interface NoteRepository : JpaRepository<NoteEntity, UUID> {
     fun findByIdAndOwner_Id(id: UUID, ownerId: UUID): NoteEntity?
 
+    fun findByIdAndOwner_IdAndDeletedAtIsNull(id: UUID, ownerId: UUID): NoteEntity?
+
     fun findByOwner_IdAndDeletedAtIsNullOrderByUpdatedAtDescIdAsc(
         ownerId: UUID,
     ): List<NoteEntity>

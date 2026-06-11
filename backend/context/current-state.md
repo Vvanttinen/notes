@@ -44,6 +44,7 @@
 ## Current user boundary
 
 - `CurrentUserService` resolves the authenticated JWT to the local `users` row.
+- `CurrentUser` obtains the request JWT from the Spring Security context and delegates local-user resolution to `CurrentUserService`, allowing controllers to remain thin HTTP routers.
 - The service requires nonblank `tid` and `oid` claims, parses both as UUIDs, and rejects missing or malformed values as authentication failures.
 - The service rejects a `tid` claim that does not match `NOTES_ENTRA_TENANT_ID`.
 - The durable external identity key is `(entra_tenant_id, entra_object_id)`, sourced from validated `(tid, oid)` claims.
@@ -55,6 +56,20 @@
 - `GET /api/me` is a protected integration probe under `/api/**`.
 - `GET /api/me` resolves or provisions the current local user and returns only `{ "userId": "<local-user-uuid>" }`.
 - The endpoint does not expose raw access tokens or profile claims.
+- Private note endpoints are protected under `/api/notes` and resolve the owner exclusively from the authenticated local user.
+- `POST /api/notes` accepts a client-generated note UUID plus title and body, creates an active note, and returns `201 Created`, `Location`, a strong revision `ETag`, and the note DTO.
+- `GET /api/notes` returns only the current user's active notes ordered by `updatedAt DESC, id ASC`.
+- `GET /api/notes/{noteId}` returns an active owned note and its strong revision `ETag`.
+- `PUT /api/notes/{noteId}` replaces title and body when `If-Match` contains the current strong revision ETag.
+- `DELETE /api/notes/{noteId}` soft-deletes an active owned note when `If-Match` contains the current strong revision ETag and returns `204 No Content`.
+- Cross-user, absent, and tombstoned note lookups are indistinguishable and return the same sanitized `404 Not Found` problem response.
+- Note API DTOs expose `id`, `title`, `body`, `createdAt`, `updatedAt`, and `revision`; they do not expose owner identifiers or tombstone timestamps.
+- Create requests require non-null `id`, `title`, and `body`; update requests require non-null `title` and `body`.
+- Titles are limited to 255 characters. Empty title and body strings are accepted, content is not trimmed or rewritten, and no arbitrary body-size product constraint is applied.
+- Note UUIDs are globally non-reusable, including after soft deletion; collisions return a generic `409 Conflict`.
+- Revision `N` is represented as the strong ETag `"N"`. Update and delete require exactly one quoted strong non-negative decimal `If-Match` value.
+- Missing `If-Match` returns `428 Precondition Required`; malformed, weak, wildcard, negative, overflowing, or multiple tags return `400 Bad Request`; stale valid revisions return `412 Precondition Failed` without mutation.
+- Notes API validation and custom errors use sanitized RFC 9457-style `application/problem+json` responses.
 
 ## Persistence baseline
 
@@ -75,7 +90,9 @@
 - `NoteEntity` maps the `notes` table and uses a required lazy `ManyToOne` owner association to `UserEntity`.
 - `NoteEntity.revision` is mapped with `@Version` for optimistic locking.
 - `UserRepository` supports lookup by `(entraTenantId, entraObjectId)`.
-- `NoteRepository` supports ownership-scoped lookup by `(id, owner.id)` and active notes for an owner ordered by `updatedAt DESC, id ASC`.
+- `NoteRepository` supports ownership-scoped lookup by `(id, owner.id)`, active ownership-scoped lookup that excludes tombstones, and active notes for an owner ordered by `updatedAt DESC, id ASC`.
+- Note update and delete operations flush inside their request transaction so optimistic-lock failures are translated before the HTTP response is committed.
+- Soft deletion sets `deleted_at` and preserves the row as a tombstone; no hard-delete API exists.
 
 ## Local PostgreSQL
 
@@ -92,6 +109,7 @@
 
 - Sanitized Microsoft Entra API registration instructions are in `docs/entra-api-registration.md`.
 - The documentation covers a single-tenant `Notes API` registration, default `api://<NOTES_ENTRA_API_CLIENT_ID>` Application ID URI, delegated `access_as_user` scope, required backend environment variables, and deferred Android public-client setup.
+- The private Notes CRUD contract, DTO validation, ETag rules, statuses, sanitized errors, and deferred synchronization work are documented in `docs/notes-api.md`.
 
 ## Integration tests
 
@@ -99,10 +117,12 @@
 - The test PostgreSQL image is `postgres:17-alpine`, matching the local Compose major version.
 - Spring Boot test connection details are supplied through `@ServiceConnection`.
 - `AbstractIntegrationTest` starts the Spring Boot context with the Testcontainers configuration, deterministic test-only Entra property values, and a primary test `JwtDecoder` so tests do not contact a live tenant.
+- The deterministic test Entra properties override the bound Spring property names directly, so host environment variables cannot change test identities.
 - `AbstractIntegrationTest` truncates `notes` before `users` with `RESTART IDENTITY CASCADE` before each test.
 - `NotesApplicationTests` is a context-load smoke test that exercises container startup, Spring Boot service connection wiring, Flyway migration, and JPA mapping validation.
 - `PersistenceIntegrationTest` covers user identity lookup, unique Entra identity enforcement, note ownership scoping, active-note filtering, active-note ordering by `updatedAt DESC, id ASC`, and optimistic-lock revision updates.
 - `ResourceServerIntegrationTest` covers anonymous health access, unauthenticated `/api/me` rejection, missing-scope rejection, Spring's `scp` to `SCOPE_` JWT authority conversion, Notes API audience-validator accept/reject behavior, valid scoped `/api/me` provisioning, repeated identity idempotency, mismatched tenant rejection, missing and malformed identity-claim rejection, and concurrent first-use provisioning.
+- `NotesApiIntegrationTest` exercises real Spring MVC, Spring Security, current-user resolution, JPA, Flyway, and PostgreSQL wiring for Notes API authentication and scope enforcement, creation and ownership, empty content, title validation, UUID conflicts, active-list ordering, hidden cross-user and tombstoned reads, strong ETags, strict `If-Match` parsing, successful and stale updates, soft deletion, stale deletes, and sanitized problem responses.
 - Tests run against PostgreSQL, not H2.
 
 ## Verification
@@ -112,9 +132,8 @@
 
 ## Deferred work
 
-- REST CRUD controllers and DTOs remain deferred.
 - Android MSAL wiring, Android app registration, redirect configuration, signing-certificate hash setup, and live end-to-end token verification remain deferred.
-- Private notes CRUD endpoints remain deferred.
-- Offline synchronization endpoints, cursor queries, conflict-resolution APIs, and related sync infrastructure remain deferred.
+- Offline synchronization endpoints, cursor design and queries, batch synchronization, conflict-resolution APIs, and related sync infrastructure remain deferred.
+- Android networking and frontend integration for the Notes CRUD API remain deferred.
 - Sharing tables and sharing behavior remain deferred.
 - Frontend changes are not part of this backend baseline.
